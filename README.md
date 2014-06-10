@@ -9,3 +9,5 @@ Technical specifications:
 
 - Python 2.7
 - PyQt (at least)4.8.3
+
+License: MIT
