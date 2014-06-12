@@ -4,12 +4,15 @@ from operator import add, sub
 from PyQt4 import QtGui, QtCore
 
 ex = None
+minimum = -20.0
+maximum =  20.0
+i = 0
 
 class Gauge(QtGui.QWidget):
     ''' Gauge pointer movement:
         minimum->maximum values: clockwise rotation
     '''
-    def __init__(self, length=300.0, end_angle=300.0, min=0.0, max=100.0, main_points=10,
+    def __init__(self, length=300.0, end_angle=300.0, min=-20.0, max=20.0, main_points=9,
                  warning=[], danger=[], multiplier='', units='', description=''):
         super(Gauge, self).__init__()
 
@@ -148,10 +151,10 @@ class Gauge(QtGui.QWidget):
 
     def set_gauge(self, value):
         #Clamp between [min, max]
-        value = max(min(value, self.max), self.min)
+        self.curr_value = max(min(value, self.max), self.min)
 
         p = QtGui.QPainterPath()
-        p.arcMoveTo(self.bounding_rect, self.start_angle-self.val2deg(value))
+        p.arcMoveTo(self.bounding_rect, self.start_angle-self.val2deg(self.curr_value))
         x, y = p.currentPosition().x(), p.currentPosition().y()
 
         self.gauge_line = QtGui.QPainterPath()
@@ -238,8 +241,9 @@ class Gauge(QtGui.QWidget):
         QtGui.QWidget.paintEvent(self, event)
 
 def onTimeout():
-    step = 2
-    ex.increment_gauge(step)
+    global i, minimum
+    ex.set_gauge(minimum + i*0.2)
+    i += 1
 
 if __name__ == '__main__':
     timer = QtCore.QTimer()
@@ -247,8 +251,8 @@ if __name__ == '__main__':
     timer.setInterval(50)
 
     app = QtGui.QApplication(sys.argv)
-    ex = Gauge(warning=[(5, 10)],
-               danger=[(0, 5)],
+    ex = Gauge(warning=[(-15, -10), (10, 15)],
+               danger=[(-20, -15), (15, 20)],
                description='Pitch',
                multiplier='', units='degrees')
     ex.show()
