@@ -8,31 +8,31 @@ ex = None
 class Gauge(QtGui.QWidget):
     ''' Gauge pointer movement:
         minimum->maximum values: clockwise rotation
-        maximum value > minimum-value
     '''
-    def __init__(self, length=300.0, end_angle=300.0, min=0.0, max=1000.0, main_points=10,
+    def __init__(self, length=300.0, end_angle=300.0, min=0.0, max=100.0, main_points=10,
                  warning=[], danger=[], multiplier='', units='', description=''):
         super(Gauge, self).__init__()
 
         self.setFixedSize(300, 300)
-        self.move(300, 200)
         self.setWindowTitle('A Magnificent Gauge')
         self.setAutoFillBackground(True)
 
-        self.min = min
-        self.curr_value = min
+        self.min = self.curr_value = min
         self.max = max
+
+        self.main_points = main_points
+        self.length = length
         self.start_angle = (end_angle + length) % 360
         self.end_angle = end_angle % 360
-        self.length = length
-        self.main_points = main_points
+
         self.gauge_ticks = []
-        self.bounding_rect = QtCore.QRectF(25.0, 25.0, 250.0, 250.0)
-        self.center = QtCore.QPointF(150.0, 150.0)
-        self.warning = warning #zones
-        self.danger = danger #zones
-        self.center_radius = 5.0
         self.margin = 12
+        self.center_radius = 5.0
+        self.center = QtCore.QPointF(150.0, 150.0)
+        self.bounding_rect = QtCore.QRectF(25.0, 25.0, 250.0, 250.0)
+        self.danger = danger
+        self.warning = warning
+
         self.units = units
         self.multiplier = multiplier
         self.description = description
@@ -53,7 +53,6 @@ class Gauge(QtGui.QWidget):
         self.danger_bg.setColorAt(1.0, QtCore.Qt.black)
 
         self.current_bg = QtCore.Qt.black
-
         self.create_gauge()
 
     def detect_safe_zones(self):
@@ -83,16 +82,14 @@ class Gauge(QtGui.QWidget):
             font = QtGui.QFont()
             metrics = QtGui.QFontMetrics(font)
             return metrics.width(text)
-            
+
         #Main points
+        divisor = self.main_points
         if self.start_angle != self.end_angle:
-            angle_step = self.length/(self.main_points-1)
-            value_step = abs(self.max-self.min)/(self.main_points-1)
-            op = add if self.start_angle > self.end_angle else sub
-        else:
-            angle_step = self.length/self.main_points
-            value_step = abs(self.max-self.min)/self.main_points
-            op = add
+            divisor -= 1
+
+        angle_step = self.length/divisor
+        value_step = abs(self.max-self.min)/divisor
 
         #Gauge main line(the circular path)
         #Safe zones
@@ -125,7 +122,7 @@ class Gauge(QtGui.QWidget):
 
         for i in xrange(self.main_points):
             #Find the point on the curve
-            angle = op(self.start_angle, i*angle_step)
+            angle = self.start_angle - i*angle_step
             value = self.min + i*value_step
             p = QtGui.QPainterPath()
             p.arcMoveTo(self.bounding_rect, angle)
@@ -133,15 +130,15 @@ class Gauge(QtGui.QWidget):
             x_new = x*0.9 + self.center.x()*0.1
             y_new = y*0.9 + self.center.y()*0.1
 
-            x_text = x*0.8 + self.center.x()*0.2 #- (text_width(str(value))/2)*self.polynomial_interpolation(abs(math.radians(angle)))
+            x_text = x*0.8 + self.center.x()*0.2
             y_text = y*0.8 + self.center.y()*0.2
-            
-            #And create the path
-            new = QtGui.QPainterPath()
-            new.moveTo(x_new, y_new)
-            new.lineTo(x, y)
 
-            self.gauge_ticks.append([QtCore.QPointF(x_text, y_text), value, new])
+            #And create the path
+            tick_path = QtGui.QPainterPath()
+            tick_path.moveTo(x_new, y_new)
+            tick_path.lineTo(x, y)
+
+            self.gauge_ticks.append([QtCore.QPointF(x_text, y_text), value, tick_path])
 
     def val2deg(self, value):
         return self.length*((value-self.min)/abs(self.max-self.min))
@@ -227,7 +224,9 @@ class Gauge(QtGui.QWidget):
         #Draw the paths
         painter.setPen(self.ui_color_tick)
         for path in self.gauge_ticks:
+            #The point to draw the tick value and its value(bottom left)
             painter.drawText(path[0], str(int(path[1])))
+            #The actual tick
             painter.drawPath(path[2])
 
         #Draw the text labels
@@ -248,10 +247,10 @@ if __name__ == '__main__':
     timer.setInterval(50)
 
     app = QtGui.QApplication(sys.argv)
-    ex = Gauge(warning=[(100, 200)],
-               danger=[(0, 100)],
-               description='Very important description',
-               multiplier='x5', units='m/s')
+    ex = Gauge(warning=[(5, 10)],
+               danger=[(0, 5)],
+               description='Pitch',
+               multiplier='', units='degrees')
     ex.show()
     timer.start()
     sys.exit(app.exec_())
