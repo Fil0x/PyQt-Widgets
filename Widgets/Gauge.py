@@ -12,7 +12,7 @@ class Gauge(QtGui.QWidget):
     ''' Gauge pointer movement:
         minimum->maximum values: clockwise rotation
     '''
-    def __init__(self, length=300.0, end_angle=300.0, min=-20.0, max=20.0, main_points=9,
+    def __init__(self, length=300.0, end_angle=300.0, min=-20.0, max=20.0, main_points=21,
                  warning=[], danger=[], multiplier='', units='', description=''):
         super(Gauge, self).__init__()
 
@@ -27,6 +27,7 @@ class Gauge(QtGui.QWidget):
         self.length = length
         self.start_angle = (end_angle + length) % 360
         self.end_angle = end_angle % 360
+        self.is_circle = self.start_angle == self.end_angle
 
         self.gauge_ticks = []
         self.margin = 12
@@ -133,8 +134,8 @@ class Gauge(QtGui.QWidget):
             x_new = x*0.9 + self.center.x()*0.1
             y_new = y*0.9 + self.center.y()*0.1
 
-            x_text = x*0.8 + self.center.x()*0.2
-            y_text = y*0.8 + self.center.y()*0.2
+            x_text = x*0.8 + self.center.x()*0.2 - (text_width(str(round(value, 1)))-10)/2
+            y_text = y*0.8 + self.center.y()*0.2 + 4            
 
             #And create the path
             tick_path = QtGui.QPainterPath()
@@ -226,18 +227,17 @@ class Gauge(QtGui.QWidget):
 
         #Draw the paths
         painter.setPen(self.ui_color_tick)
-        for path in self.gauge_ticks:
-            #The point to draw the tick value and its value(bottom left)
-            painter.drawText(path[0], str(int(path[1])))
-            #The actual tick
-            painter.drawPath(path[2])
+        for i, path in enumerate(self.gauge_ticks):
+            if not (self.is_circle and i == (len(self.gauge_ticks))):
+                painter.drawText(path[0], str(int(path[1])))
+ 		painter.drawPath(path[2])
 
         #Draw the text labels
-        painter.drawText(QtCore.QPointF(self.center.x()-center_text(str(self.curr_value)), 250.0), str(self.curr_value))
-        painter.drawText(QtCore.QPointF(self.center.x()-center_text(self.multiplier), 250.0+self.margin), self.multiplier)
-        painter.drawText(QtCore.QPointF(self.center.x()-center_text(self.units), 250.0+self.margin*2), self.units)
-        painter.drawText(QtCore.QPointF(self.center.x()-center_text(self.description), 250.0+self.margin*3), self.description)
-
+        painter.drawText(QtCore.QPointF(self.center.x()-center_text(str(self.curr_value)), self.center.y()-40), str(self.curr_value))
+        painter.drawText(QtCore.QPointF(self.center.x()-center_text(self.multiplier), self.center.y()+20+self.margin), self.multiplier)
+        painter.drawText(QtCore.QPointF(self.center.x()-center_text(self.units), self.center.y()+20+self.margin*2), self.units)
+        painter.drawText(QtCore.QPointF(self.center.x()-center_text(self.description), self.center.y()+20+self.margin*3), self.description)
+  
         QtGui.QWidget.paintEvent(self, event)
 
 def onTimeout():
