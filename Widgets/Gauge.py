@@ -12,7 +12,9 @@ class Gauge(QtGui.QWidget):
     ''' Gauge pointer movement:
         minimum->maximum values: clockwise rotation
     '''
-    def __init__(self, length=300.0, end_angle=300.0, min=-20.0, max=20.0, main_points=21,
+    marker_set = QtCore.pyqtSignal(float)
+
+    def __init__(self, length=300.0, end_angle=300.0, min=-20.0, max=20.0, main_points=10,
                  warning=[], danger=[], multiplier='', units='', description=''):
         super(Gauge, self).__init__()
 
@@ -34,6 +36,7 @@ class Gauge(QtGui.QWidget):
         self.center_radius = 5.0
         self.center = QtCore.QPointF(150.0, 150.0)
         self.bounding_rect = QtCore.QRectF(25.0, 25.0, 250.0, 250.0)
+        self.marker_rect = QtCore.QRectF(15.0, 15.0, 270.0, 270.0)
         self.danger = danger
         self.warning = warning
 
@@ -42,6 +45,8 @@ class Gauge(QtGui.QWidget):
         self.description = description
 
         #Various ui colors
+        self.marker_tick_color = QtGui.QPen(QtGui.QColor('#FF9900'), 1.8)
+
         self.ui_color = QtGui.QPen(QtCore.Qt.green, 2.5)
         self.ui_color_tick = QtGui.QPen(QtCore.Qt.green, 1.5)
         self.gauge_color = QtGui.QPen(QtCore.Qt.lightGray, 2)
@@ -135,7 +140,7 @@ class Gauge(QtGui.QWidget):
             y_new = y*0.9 + self.center.y()*0.1
 
             x_text = x*0.8 + self.center.x()*0.2 - (text_width(str(round(value, 1)))-10)/2
-            y_text = y*0.8 + self.center.y()*0.2 + 4            
+            y_text = y*0.8 + self.center.y()*0.2 + 4
 
             #And create the path
             tick_path = QtGui.QPainterPath()
@@ -144,8 +149,82 @@ class Gauge(QtGui.QWidget):
 
             self.gauge_ticks.append([QtCore.QPointF(x_text, y_text), value, tick_path])
 
+        #Store the tick_length for the marker area
+        self.tick_length = math.sqrt((x-x_new)**2+(y-y_new)**2)
+
     def val2deg(self, value):
         return self.length*((value-self.min)/abs(self.max-self.min))
+
+    def deg2val(self, degrees):
+        #Convert the given degress relative to the start_angle to
+        #the respective value
+        return abs(self.max-self.min)*(degrees/self.length)+self.min
+
+    def mouseReleaseEvent(self, e):
+        #marker_line and marker_value dont exist before the first call of this function
+        click_pos = e.posF()
+
+        x_coeff = (click_pos.x() - self.center.x())**2
+        y_coeff = (click_pos.y() - self.center.y())**2
+        dist = math.sqrt(x_coeff + y_coeff)
+
+        w = self.bounding_rect.width()/2
+
+        if w -  self.tick_length <= dist <= w:
+            #Find the angle between the start angle and the click point
+            
+            angle = self.angle_from_zero(self.center, click_pos, self.start_angle)
+            #Return if the user clicked outside of the allowed range
+            if self.deg2val(angle) > self.max or self.deg2val(angle) < self.min:
+                return
+
+            self.set_marker(self.deg2val(angle))
+            
+    def angle_from_zero(self, p1, p2, offset):
+        angle = math.degrees(math.atan2(p1.y()-p2.y(),
+                                 p2.x()-p1.x()))
+
+        if angle < 0:
+            angle += 360
+        angle = offset - angle
+        if angle < 0:
+            angle += 360
+            
+        return angle
+
+    def set_marker(self, value):
+        #New values: marker_point
+        #Emit the new value
+        self.marker_value = max(min(value, self.max), self.min)
+        self.marker_set.emit(self.marker_value)
+        #Rount it for presentation purposes
+        self.marker_value = round(self.marker_value, 2)
+
+        #Create the marker line
+        p = QtGui.QPainterPath()
+        p.arcMoveTo(self.bounding_rect, self.start_angle - self.val2deg(value))
+        self.marker_point = p.currentPosition()
+        self.draw_marker(y=3)
+        
+    def compute_marker_rotation(self):
+        #Marker_point is already set and ready for use
+        angle = self.angle_from_zero(self.center, self.marker_point, 90)
+        
+        return angle
+        
+    def draw_marker(self, x=0, y=0, size=10):
+        poly = QtGui.QPolygonF()
+        poly.append(QtCore.QPointF(x-size, y))
+        poly.append(QtCore.QPointF(x+size, y))
+        poly.append(QtCore.QPointF(x+size, y-size))
+        poly.append(QtCore.QPointF(x, y))
+        poly.append(QtCore.QPointF(x-size, y-size))
+        poly.append(QtCore.QPointF(x-size, y))
+
+        self.marker_line = QtGui.QPainterPath()
+        self.marker_line.addPolygon(poly)
+
+        self.update()
 
     def val2deg_tuple(self, t):
         return map(self.val2deg, t)
@@ -220,6 +299,14 @@ class Gauge(QtGui.QWidget):
         for d in self.gauge_danger:
             painter.drawPath(d)
 
+        #Draw the marker line
+        if getattr(self, 'marker_line', None):
+            painter.setPen(self.marker_tick_color)
+            painter.translate(self.marker_point)
+            painter.rotate(self.compute_marker_rotation())
+            painter.drawPath(self.marker_line)
+            painter.resetTransform()
+
         #Draw the center circle
         painter.setPen(self.ui_color)
         painter.drawEllipse(self.center.x()-self.center_radius/2, self.center.y()-self.center_radius/2,
@@ -237,13 +324,23 @@ class Gauge(QtGui.QWidget):
         painter.drawText(QtCore.QPointF(self.center.x()-center_text(self.multiplier), self.center.y()+20+self.margin), self.multiplier)
         painter.drawText(QtCore.QPointF(self.center.x()-center_text(self.units), self.center.y()+20+self.margin*2), self.units)
         painter.drawText(QtCore.QPointF(self.center.x()-center_text(self.description), self.center.y()+20+self.margin*3), self.description)
-  
+
+        painter.setPen(self.marker_tick_color)
+        if getattr(self, 'marker_value', None):
+            painter.drawText(QtCore.QPointF(self.center.x()-center_text(str(self.marker_value)), self.center.y()-20), str(self.marker_value))
+
         QtGui.QWidget.paintEvent(self, event)
 
 def onTimeout():
     global i, minimum
     ex.set_gauge(minimum + i*0.2)
     i += 1
+    # if i == 50:
+        # ex.set_marker(5.5)
+
+def onClick(val):
+    # print val
+    pass
 
 if __name__ == '__main__':
     timer = QtCore.QTimer()
@@ -255,6 +352,7 @@ if __name__ == '__main__':
                danger=[(-20, -15), (15, 20)],
                description='Pitch',
                multiplier='', units='degrees')
+    ex.marker_set.connect(onClick)
     ex.show()
     timer.start()
     sys.exit(app.exec_())
