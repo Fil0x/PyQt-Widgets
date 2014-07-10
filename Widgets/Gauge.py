@@ -14,12 +14,12 @@ class Gauge(QtGui.QWidget):
     '''
     marker_set = QtCore.pyqtSignal(float)
 
-    def __init__(self, length=300.0, end_angle=300.0, min=-20.0, max=20.0, main_points=10,
+    def __init__(self, length=300.0, end_angle=300.0, min=-30.0, max=30.0, main_points=10,
                  warning=[], danger=[], multiplier='', units='', description=''):
         super(Gauge, self).__init__()
 
         self.setFixedSize(300, 300)
-        self.setWindowTitle('A Magnificent Gauge')
+        self.setWindowTitle('Nil')
         self.setAutoFillBackground(True)
 
         self.min = self.curr_value = min
@@ -154,14 +154,17 @@ class Gauge(QtGui.QWidget):
 
     def val2deg(self, value):
         return self.length*((value-self.min)/abs(self.max-self.min))
+        
+    def val2deg_tuple(self, t):
+        return map(self.val2deg, t)
 
     def deg2val(self, degrees):
         #Convert the given degress relative to the start_angle to
         #the respective value
         return abs(self.max-self.min)*(degrees/self.length)+self.min
 
-    def mouseReleaseEvent(self, e):
-        #marker_line and marker_value dont exist before the first call of this function
+    def mouseMoveEvent(self, e):
+        #marker_line and marker_value don't exist before the first call of this function
         click_pos = e.posF()
 
         x_coeff = (click_pos.x() - self.center.x())**2
@@ -172,24 +175,22 @@ class Gauge(QtGui.QWidget):
 
         if w -  self.tick_length <= dist <= w:
             #Find the angle between the start angle and the click point
-            
             angle = self.angle_from_zero(self.center, click_pos, self.start_angle)
             #Return if the user clicked outside of the allowed range
             if self.deg2val(angle) > self.max or self.deg2val(angle) < self.min:
                 return
 
             self.set_marker(self.deg2val(angle))
-            
+
     def angle_from_zero(self, p1, p2, offset):
-        angle = math.degrees(math.atan2(p1.y()-p2.y(),
-                                 p2.x()-p1.x()))
+        angle = math.degrees(math.atan2(p1.y()-p2.y(), p2.x()-p1.x()))
 
         if angle < 0:
             angle += 360
         angle = offset - angle
         if angle < 0:
             angle += 360
-            
+
         return angle
 
     def set_marker(self, value):
@@ -205,13 +206,11 @@ class Gauge(QtGui.QWidget):
         p.arcMoveTo(self.bounding_rect, self.start_angle - self.val2deg(value))
         self.marker_point = p.currentPosition()
         self.draw_marker(y=3)
-        
+
     def compute_marker_rotation(self):
         #Marker_point is already set and ready for use
-        angle = self.angle_from_zero(self.center, self.marker_point, 90)
-        
-        return angle
-        
+        return self.angle_from_zero(self.center, self.marker_point, 90)
+
     def draw_marker(self, x=0, y=0, size=10):
         poly = QtGui.QPolygonF()
         poly.append(QtCore.QPointF(x-size, y))
@@ -225,9 +224,6 @@ class Gauge(QtGui.QWidget):
         self.marker_line.addPolygon(poly)
 
         self.update()
-
-    def val2deg_tuple(self, t):
-        return map(self.val2deg, t)
 
     def set_gauge(self, value):
         #Clamp between [min, max]
@@ -255,7 +251,7 @@ class Gauge(QtGui.QWidget):
         self.gauge_line.lineTo(x, y)
         self.update()
 
-    def set_bg_color(self):
+    def _set_bg_color(self):
         #Determine the zone that the gauge arrow is inside
         #Is it in a warning zone?
         for w in self.warning:
@@ -279,7 +275,7 @@ class Gauge(QtGui.QWidget):
         painter.setRenderHint(QtGui.QPainter.Antialiasing)
 
         #Draw the background
-        self.set_bg_color()
+        self._set_bg_color()
         painter.fillRect(event.rect(), self.current_bg)
 
         painter.setBrush(QtCore.Qt.transparent)
